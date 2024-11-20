@@ -95,6 +95,7 @@ void TIM5_IRQHandler(void)
 {
   if(TIM5->SR & TIM_SR_UIF)
   {	
+		//TODO Fix mpu6050 reading freq, integrate into PID
 		MPU6050_Read_Accel();
 		average_error = movingAverageFunction(difference, moving_average_buffer_error, pSum);
 		pid_output = PID_controller(average_error, pSumPID);
@@ -145,9 +146,6 @@ int main (void){
 		set_point = roundFunction(slope_angle * ADC_VAL[1]);
 		
 		difference = set_point - simulated_angle;
-		
-		//Set duty of PWM pulse
-		//TIM2->CCR1 = PID_controller(2);
 		
 	}
 	
