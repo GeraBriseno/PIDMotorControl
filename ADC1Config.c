@@ -36,8 +36,8 @@ void ADC_Enable(void){
 	ADC1->CR2 |= 1<<0;
 	
 	//Wait for ADC to stabilize (approx 10us)
-	uint32_t delay = 10000;
-	while (delay--);
+	//uint32_t delay = 10000;
+	//while (delay--);
 	
 }
 

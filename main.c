@@ -1,6 +1,7 @@
 #include "stm32f401xe.h"
 #include "sysClockConfig.h"
 #include "TIM2setUp.h"
+#include "TIM3setUp.h"
 #include "TIM5setUp.h"
 #include "gpioConfig.h"
 #include "ADC1Config.h"
@@ -8,6 +9,9 @@
 #include "MPU6050IF.h"
 #include <math.h>
 #include "stdio.h"
+
+static uint8_t adcFlag = 0;
+static uint8_t mpuFlag = 1;
 
 // Variable to store output of potentiometer after being normalized to 0-45 to simulate accelerometer angle
 static uint32_t simulated_angle = 0;
@@ -91,23 +95,36 @@ static double PID_controller(double error, double *pSumPIDArg){
 	return pid_output;
 }
 
+void TIM3_IRQHandler(void)
+{
+  if(TIM3->SR & TIM_SR_UIF)
+  {	
+		
+    TIM3->SR &= ~TIM_SR_UIF;
+  }
+}
+
 void TIM5_IRQHandler(void)
 {
   if(TIM5->SR & TIM_SR_UIF)
   {	
-		//TODO Fix mpu6050 reading freq, integrate into PID
-		MPU6050_Read_Accel();
-		average_error = movingAverageFunction(difference, moving_average_buffer_error, pSum);
-		pid_output = PID_controller(average_error, pSumPID);
-		average = movingAverageFunction(pid_output, moving_average_buffer, pSum);
-		applied_pwm = roundFunction(slope_pwm * average)+1010;
-		
-		if(applied_pwm > 1200){
-			applied_pwm = 1200;
+		if(adcFlag == 1){
+
+			MPU6050_Read_Accel();
+			average_error = movingAverageFunction(difference, moving_average_buffer_error, pSum);
+			pid_output = PID_controller(average_error, pSumPID);
+			average = movingAverageFunction(pid_output, moving_average_buffer, pSum);
+			applied_pwm = roundFunction(slope_pwm * average)+1010;
+			
+			if(applied_pwm > 1200){
+				applied_pwm = 1200;
+			}
+			
+			TIM2->CCR1 = applied_pwm;
+			
+			adcFlag = 0;
+			mpuFlag = 1;
 		}
-		
-		TIM2->CCR1 = applied_pwm;
-		
 		TIM5->SR &= ~TIM_SR_UIF;
   }
 }
@@ -118,6 +135,7 @@ int main (void){
 	// Run our configuration functions
 	SysClockConfig();
 	configureTIM2_PWM();
+	configureTIM3();
 	configureTIM5();
 	GPIO_Config();
 	ADC_Init();
@@ -129,24 +147,28 @@ int main (void){
 	// Our while loop
 	while (1)
 	{	
-		// Read value from ADC channel 1
-		ADC_Start(1);
-		ADC_WaitForConv();
-		ADC_VAL[0] = ADC_GetVal();
-		
-		//Normalize ADC1 channel 1 input to a 0-45 scale
-		simulated_angle = roundFunction(slope_angle * ADC_VAL[0]);
-		
-		// Read value from ADC channel 4
-		ADC_Start(4);
-		ADC_WaitForConv();
-		ADC_VAL[1] = ADC_GetVal();
-		
-		//Normalize ADC1 channel 4 input to a 0-45 scale
-		set_point = roundFunction(slope_angle * ADC_VAL[1]);
-		
-		difference = set_point - simulated_angle;
-		
+		if(mpuFlag == 1){
+			// Read value from ADC channel 1
+			ADC_Start(1);
+			ADC_WaitForConv();
+			ADC_VAL[0] = ADC_GetVal();
+			
+			//Normalize ADC1 channel 1 input to a 0-45 scale
+			simulated_angle = roundFunction(slope_angle * ADC_VAL[0]);
+			
+			// Read value from ADC channel 4
+			ADC_Start(4);
+			ADC_WaitForConv();
+			ADC_VAL[1] = ADC_GetVal();
+			
+			//Normalize ADC1 channel 4 input to a 0-45 scale
+			set_point = roundFunction(slope_angle * ADC_VAL[1]);
+			
+			difference = set_point - simulated_angle;
+			
+			mpuFlag = 0;
+			adcFlag = 1;
+		}
 	}
 	
 }
