@@ -1,7 +1,6 @@
 #include "stm32f401xe.h"
 #include "sysClockConfig.h"
 #include "TIM2setUp.h"
-#include "TIM3setUp.h"
 #include "TIM5setUp.h"
 #include "gpioConfig.h"
 #include "ADC1Config.h"
@@ -10,8 +9,9 @@
 #include <math.h>
 #include "stdio.h"
 
-static uint8_t adcFlag = 0;
-static uint8_t mpuFlag = 1;
+// Variables to hold operation completion status for adc and mpu i2c readings
+static uint8_t adcReadStatusFlag = 0;
+static uint8_t mpuReadStatusFlag = 1;
 
 // Variable to store output of potentiometer after being normalized to 0-45 to simulate accelerometer angle
 static uint32_t simulated_angle = 0;
@@ -45,20 +45,27 @@ static uint32_t roundFunction(double d){
     return floor(d + 0.5);
 }
 
+// Array to store values from ADC
 static uint16_t ADC_VAL[2] = {0,0};
 
+// Variables to store values for PID constants and sampling rate
 static double kp = 1;
 static double kd = 1;
 static double ki = .1;
 static double sampling_rate = 0.005;
+
+// Variables for averages calculation
 #define MOVING_AVERAGE_BUFFER_SIZE 100
 static double moving_average_buffer[MOVING_AVERAGE_BUFFER_SIZE];
 static double moving_average_buffer_error[MOVING_AVERAGE_BUFFER_SIZE];
+
+// Variables to store the sum used in the integral part of the PID controller
 static double sum = 0;
 static double* pSum = &sum;
 static double sumPID = 0;
 static double* pSumPID = &sumPID;
 
+//Function to obtain an average of values that gets updated after each sencor reading
 static double movingAverageFunction(double new_angle, double *buffer, double *pSumArg){
 	static double averaged_angle;
 	
@@ -82,6 +89,7 @@ static double movingAverageFunction(double new_angle, double *buffer, double *pS
 	return averaged_angle;
 }
 
+// PID controller implementation
 static double PID_controller(double error, double *pSumPIDArg){
 	
 	static double old_error, pid_output;
@@ -95,20 +103,12 @@ static double PID_controller(double error, double *pSumPIDArg){
 	return pid_output;
 }
 
-void TIM3_IRQHandler(void)
-{
-  if(TIM3->SR & TIM_SR_UIF)
-  {	
-		
-    TIM3->SR &= ~TIM_SR_UIF;
-  }
-}
-
+// ISR function that runs every 10ms, reads angle from MPU6050 sensor, performs PID operation and applies pwm value to motor
 void TIM5_IRQHandler(void)
 {
   if(TIM5->SR & TIM_SR_UIF)
   {	
-		if(adcFlag == 1){
+		if(adcReadStatusFlag == 1){
 
 			MPU6050_Read_Accel();
 			average_error = movingAverageFunction(difference, moving_average_buffer_error, pSum);
@@ -122,8 +122,8 @@ void TIM5_IRQHandler(void)
 			
 			TIM2->CCR1 = applied_pwm;
 			
-			adcFlag = 0;
-			mpuFlag = 1;
+			adcReadStatusFlag = 0;
+			mpuReadStatusFlag = 1;
 		}
 		TIM5->SR &= ~TIM_SR_UIF;
   }
@@ -135,7 +135,6 @@ int main (void){
 	// Run our configuration functions
 	SysClockConfig();
 	configureTIM2_PWM();
-	configureTIM3();
 	configureTIM5();
 	GPIO_Config();
 	ADC_Init();
@@ -147,7 +146,8 @@ int main (void){
 	// Our while loop
 	while (1)
 	{	
-		if(mpuFlag == 1){
+		if(mpuReadStatusFlag == 1){
+			
 			// Read value from ADC channel 1
 			ADC_Start(1);
 			ADC_WaitForConv();
@@ -166,8 +166,8 @@ int main (void){
 			
 			difference = set_point - simulated_angle;
 			
-			mpuFlag = 0;
-			adcFlag = 1;
+			mpuReadStatusFlag = 0;
+			adcReadStatusFlag = 1;
 		}
 	}
 	
