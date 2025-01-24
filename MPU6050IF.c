@@ -13,9 +13,9 @@
 #define PWR_MGMT_1_REG 0x6B
 #define WHO_AM_I_REG 0x75
 
-int16_t Accel_X_Raw = 0;
-int16_t Accel_Y_Raw = 0;
-int16_t Accel_Z_Raw = 0;
+static int16_t Accel_X_Raw = 0;
+static int16_t Accel_Y_Raw = 0;
+static int16_t Accel_Z_Raw = 0;
 
 /*
 int16_t Gyro_X_Raw = 0;
@@ -23,8 +23,9 @@ int16_t Gyro_Y_Raw = 0;
 int16_t Gyro_Z_Raw = 0;
 */
 
-float Ax, Ay, Az;
-float rollAngle, pitchAngle;
+static float Ax, Ay, Az;
+static float rollAngle;
+//float pitchAngle;
 
 void MPU_Write(uint8_t Address, uint8_t Register, uint8_t Data){
 	I2C_Start();
@@ -76,7 +77,7 @@ void MPU6050_Init(void){
 	
 }
 
-void MPU6050_Read_Accel(void){
+float MPU6050_Read_Accel(void){
 	
 	uint8_t Rx_Data[6];
 	
@@ -91,7 +92,9 @@ void MPU6050_Read_Accel(void){
 	Az = (Accel_Z_Raw/16384.0)+.11;
 	
 	rollAngle = atan(Ay/sqrt(Ax*Ax+Az*Az))*1/(3.1416/180);
-	pitchAngle = atan(Ax/sqrt(Ay*Ay+Az*Az))*1/(3.1416/180);
+	//pitchAngle = atan(Ax/sqrt(Ay*Ay+Az*Az))*1/(3.1416/180);
+	
+	return rollAngle;
 	
 }
 

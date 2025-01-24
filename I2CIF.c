@@ -56,7 +56,7 @@ void I2C_Address(uint8_t Address){
 	while (!(I2C1->SR1 & (1<<1)));
 	
 	// 3.- Read status bits for status registers 1 and 2 to clear ADDR bit
-	uint8_t temp = I2C1->SR1 | I2C1->SR2;
+	I2C1->SR1 | I2C1->SR2;
 	
 }
 
@@ -116,7 +116,7 @@ void I2C_Read(uint8_t Address, uint8_t *buffer, uint8_t size){
 		I2C1->CR1 &= ~(1<<10);
 		
 		//Read status bits for status registers 1 and 2 to clear ADDR bit
-		uint8_t temp = I2C1->SR1 | I2C1->SR2;
+		I2C1->SR1 | I2C1->SR2;
 		
 		//Stop I2C1 
 		I2C1->CR1 |= (1<<9);
@@ -136,7 +136,7 @@ void I2C_Read(uint8_t Address, uint8_t *buffer, uint8_t size){
 		while (!(I2C1->SR1 & (1<<1)));
 		
 		//Read status bits for status registers 1 and 2 to clear ADDR bit
-		uint8_t temp = I2C1->SR1 | I2C1->SR2;
+		I2C1->SR1 | I2C1->SR2;
 		
 		while(remaining > 2){
 			//Wait for RxNE bit to set

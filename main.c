@@ -9,12 +9,20 @@
 #include <math.h>
 #include "stdio.h"
 
+// Variable for a counter that augments by one approximately every one second
+static long counterTIM5 = 0;
+static long oneSecondTIM5 = 0;
+
 // Variables to hold operation completion status for adc and mpu i2c readings
 static uint8_t adcReadStatusFlag = 0;
 static uint8_t mpuReadStatusFlag = 1;
 
+/* Variable to store a flag that gets raised when the angle reading is greater than 45 degrees,
+   when this flag is raised the motor will stop. */
+static uint8_t over45DegFlag = 0;
+
 // Variable to store output of potentiometer after being normalized to 0-45 to simulate accelerometer angle
-static uint32_t simulated_angle = 0;
+static uint32_t angle = 0;
 
 // Variable to store output of potentiometer after being normalized to 0-45 to establish set point for PID controller
 static uint32_t set_point = 0;
@@ -108,9 +116,10 @@ void TIM5_IRQHandler(void)
 {
   if(TIM5->SR & TIM_SR_UIF)
   {	
-		if(adcReadStatusFlag == 1){
+		if((adcReadStatusFlag == 1) && (over45DegFlag == 0)){
 
-			MPU6050_Read_Accel();
+			angle = MPU6050_Read_Accel();
+			
 			average_error = movingAverageFunction(difference, moving_average_buffer_error, pSum);
 			pid_output = PID_controller(average_error, pSumPID);
 			average = movingAverageFunction(pid_output, moving_average_buffer, pSum);
@@ -120,10 +129,23 @@ void TIM5_IRQHandler(void)
 				applied_pwm = 1200;
 			}
 			
+			if(angle > 45)
+			{
+				applied_pwm = 1000;
+				over45DegFlag = 1;
+			}
+			
 			TIM2->CCR1 = applied_pwm;
 			
 			adcReadStatusFlag = 0;
 			mpuReadStatusFlag = 1;
+			
+			counterTIM5++;
+			if(100 == counterTIM5){
+				oneSecondTIM5 ++;
+			counterTIM5 = 0;
+			}
+			
 		}
 		TIM5->SR &= ~TIM_SR_UIF;
   }
@@ -148,14 +170,6 @@ int main (void){
 	{	
 		if(mpuReadStatusFlag == 1){
 			
-			// Read value from ADC channel 1
-			ADC_Start(1);
-			ADC_WaitForConv();
-			ADC_VAL[0] = ADC_GetVal();
-			
-			//Normalize ADC1 channel 1 input to a 0-45 scale
-			simulated_angle = roundFunction(slope_angle * ADC_VAL[0]);
-			
 			// Read value from ADC channel 4
 			ADC_Start(4);
 			ADC_WaitForConv();
@@ -164,7 +178,7 @@ int main (void){
 			//Normalize ADC1 channel 4 input to a 0-45 scale
 			set_point = roundFunction(slope_angle * ADC_VAL[1]);
 			
-			difference = set_point - simulated_angle;
+			difference = set_point - angle;
 			
 			mpuReadStatusFlag = 0;
 			adcReadStatusFlag = 1;
